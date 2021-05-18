@@ -76,7 +76,13 @@ def run(data):
     scripts_path.mkdir(parents=True, exist_ok=True)
 
     for out_name, out_data in out.items():
-        with open(f"{scripts_path / out_name}.sql", "w") as f:
+        target_path = Path(f"{scripts_path / out_name}.sql")
+
+        if target_path.exists():
+            print(f"Not rewriting {target_path}")
+            continue
+
+        with open(target_path, "w") as f:
             for query in out_data:
                 f.write(f"{query};\n")
 
