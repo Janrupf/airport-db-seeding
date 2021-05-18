@@ -15,6 +15,8 @@ ZIP_CODE_MAX = 90000
 HOUSE_NUMBER_MIN = 1
 HOUSE_NUMBER_MAX = 300
 
+PASSENGER_COUNT = 2000
+
 INSERT_COUNTRY_STATEMENT = """INSERT INTO Country (Name) VALUES (%s)"""
 INSERT_LOCATION_STATEMENT = """INSERT INTO Location (Zip, Name, Country) VALUES (%s, %s, %s)"""
 INSERT_PASSENGER_STATEMENT = """INSERT INTO Passenger (Name, Surname, PassportID, HouseNumber, Street, Residence) VALUES (%s, %s, %s, %s, %s, %s)"""
@@ -46,7 +48,7 @@ def seed_passenger(location_count, data, cursor, out):
 
     out["passenger"] = list()
 
-    for i in range(400):
+    for i in range(PASSENGER_COUNT):
         first_name, surname = random.choice(names)
         street_name = random.choice(street_name_db.get_street_names())
         location = random.randint(1, location_count)
