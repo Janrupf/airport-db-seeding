@@ -4,6 +4,7 @@ from data.gatesdb import GatesDB
 from data.namedb import NameDB
 from data.streetnamesdb import StreetNamesDB
 from data.citiesdb import CitiesDB
+from data.planedb import PlaneDB
 
 from pathlib import Path
 
@@ -26,7 +27,8 @@ INSERT_LOCATION_STATEMENT = """INSERT INTO Location (Zip, Name, Country) VALUES 
 INSERT_PASSENGER_STATEMENT = """INSERT INTO Passenger (Name, Surname, PassportID, HouseNumber, Street, Residence) VALUES (%s, %s, %s, %s, %s, %s)"""
 INSERT_AIRPORT_EMPLOYEE_STATEMENT = """INSERT INTO AirportEmployee(Name, Surname, Job, HouseNumber, Street, Residence) VALUES (%s, %s, %s, %s, %s, %s)"""
 INSERT_GATE_STATEMENT = """INSERT INTO ParkingPosition (Label, GeographicPosition, TerminalID) VALUES (%s, POINT(%s,%s), %s)"""
-INSERT_APRON_VEHICLE = """INSERT INTO ApronVehicle(LicensePlate, Status, Job) VALUES (%s, %s, %s)"""
+INSERT_APRON_VEHICLE_STATEMENT = """INSERT INTO ApronVehicle(LicensePlate, Status, Job) VALUES (%s, %s, %s)"""
+INSERT_PLANE_TYPE_STATEMENT = """INSERT INTO PlaneType(Name) VALUES (%s)"""
 
 
 def seed_country(all_countries, cursor, out):
@@ -131,12 +133,21 @@ def seed_apron_vehicles(data, cursor, out):
         busy_count = random.randint(1, min(count - 4, 20))
 
         for i in range(busy_count):
-            out["apronVehicle"].append(cursor.mogrify(INSERT_APRON_VEHICLE, (gen_license_plate(), "Moving", job)))
+            out["apronVehicle"].append(
+                cursor.mogrify(INSERT_APRON_VEHICLE_STATEMENT, (gen_license_plate(), "Moving", job)))
 
         for i in range(count - busy_count):
-            out["apronVehicle"].append(cursor.mogrify(INSERT_APRON_VEHICLE, (gen_license_plate(), "Parking", job)))
+            out["apronVehicle"].append(
+                cursor.mogrify(INSERT_APRON_VEHICLE_STATEMENT, (gen_license_plate(), "Parking", job)))
 
-        pass
+
+def seed_planes(data, cursor, out):
+    plane_db = data.cache.get_cached_instance(PlaneDB)
+
+    out["planeType"] = list()
+
+    for plane in plane_db.get_planes():
+        out["planeType"].append(cursor.mogrify(INSERT_PLANE_TYPE_STATEMENT, (plane,)))
 
 
 def run(data):
@@ -155,6 +166,7 @@ def run(data):
         seed_employees(location_count, data, database_cursor, out)
         seed_gates(data, database_cursor, out)
         seed_apron_vehicles(data, database_cursor, out)
+        seed_planes(data, database_cursor, out)
 
     scripts_path = Path("scripts")
     scripts_path.mkdir(parents=True, exist_ok=True)
