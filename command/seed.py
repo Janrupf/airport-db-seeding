@@ -5,6 +5,8 @@ from data.namedb import NameDB
 from data.streetnamesdb import StreetNamesDB
 from data.citiesdb import CitiesDB
 from data.planedb import PlaneDB
+from data.airlinesdb import AirlinesDB
+from data.routesdb import RoutesDB
 
 from pathlib import Path
 
@@ -29,6 +31,7 @@ INSERT_AIRPORT_EMPLOYEE_STATEMENT = """INSERT INTO AirportEmployee(Name, Surname
 INSERT_GATE_STATEMENT = """INSERT INTO ParkingPosition (Label, GeographicPosition, TerminalID) VALUES (%s, POINT(%s,%s), %s)"""
 INSERT_APRON_VEHICLE_STATEMENT = """INSERT INTO ApronVehicle(LicensePlate, Status, Job) VALUES (%s, %s, %s)"""
 INSERT_PLANE_TYPE_STATEMENT = """INSERT INTO PlaneType(Name) VALUES (%s)"""
+INSERT_AIRLINE_STATEMENT = """INSERT INTO Airline(Callsign, Name, SlotCount, Country) VALUES (%s, %s, %s, %s)"""
 
 
 def seed_country(all_countries, cursor, out):
@@ -150,6 +153,20 @@ def seed_planes(data, cursor, out):
         out["planeType"].append(cursor.mogrify(INSERT_PLANE_TYPE_STATEMENT, (plane,)))
 
 
+def seed_airlines(all_countries, data, cursor, out):
+    airlines_db = data.cache.get_cached_instance(AirlinesDB)
+    routes_db = data.cache.get_cached_instance(RoutesDB)
+
+    out["airline"] = list()
+
+    for airline in airlines_db.get_airlines():
+        slot_count = len([route for route in routes_db.get_routes() if route.callsign == airline.callsign])
+        country_id = all_countries.index(airline.country) + 1
+
+
+        out["airline"].append(cursor.mogrify(INSERT_AIRLINE_STATEMENT, (airline.callsign, airline.name, slot_count, country_id)))
+
+
 def run(data):
     out = dict()
 
@@ -167,6 +184,7 @@ def run(data):
         seed_gates(data, database_cursor, out)
         seed_apron_vehicles(data, database_cursor, out)
         seed_planes(data, database_cursor, out)
+        seed_airlines(all_countries, data, database_cursor, out)
 
     scripts_path = Path("scripts")
     scripts_path.mkdir(parents=True, exist_ok=True)
@@ -183,5 +201,3 @@ def run(data):
                 f.write(f"{query};\n")
 
     data.database.rollback()
-
-    pass
