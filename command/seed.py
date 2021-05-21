@@ -1,3 +1,5 @@
+import string
+
 from data.gatesdb import GatesDB
 from data.namedb import NameDB
 from data.streetnamesdb import StreetNamesDB
@@ -17,12 +19,14 @@ HOUSE_NUMBER_MIN = 1
 HOUSE_NUMBER_MAX = 300
 
 PASSENGER_COUNT = 2000
+APRON_VEHICLE_COUNT = 100
 
 INSERT_COUNTRY_STATEMENT = """INSERT INTO Country (Name) VALUES (%s)"""
 INSERT_LOCATION_STATEMENT = """INSERT INTO Location (Zip, Name, Country) VALUES (%s, %s, %s)"""
 INSERT_PASSENGER_STATEMENT = """INSERT INTO Passenger (Name, Surname, PassportID, HouseNumber, Street, Residence) VALUES (%s, %s, %s, %s, %s, %s)"""
 INSERT_AIRPORT_EMPLOYEE_STATEMENT = """INSERT INTO AirportEmployee(Name, Surname, Job, HouseNumber, Street, Residence) VALUES (%s, %s, %s, %s, %s, %s)"""
 INSERT_GATE_STATEMENT = """INSERT INTO ParkingPosition (Label, GeographicPosition, TerminalID) VALUES (%s, POINT(%s,%s), %s)"""
+INSERT_APRON_VEHICLE = """INSERT INTO ApronVehicle(LicensePlate, Status, Job) VALUES (%s, %s, %s)"""
 
 
 def seed_country(all_countries, cursor, out):
@@ -66,7 +70,7 @@ def seed_employees(location_count, data, cursor, out):
     name_db = data.cache.get_cached_instance(NameDB)
     names = list(name_db.get_names().items())
 
-    out["airport_employee"] = list()
+    out["airportEmployee"] = list()
 
     # 'load master', 'air traffic controller', 'cleaning power', 'paramedic', 'firefighter', 'apron driver', 'construction worker', 'bus driver'
 
@@ -100,6 +104,41 @@ def seed_gates(data, cursor, out):
                                                      (gate.label, gate.geoX, gate.geoY, gate.terminal)))
 
 
+def seed_apron_vehicles(data, cursor, out):
+    # ('tanker', 'apron stairs', 'luggage cart', 'pushback', 'follow me', 'luggage loader', 'cleaning vehicle', 'toilet vehicle', 'construction vehicle', 'passenger bus', 'crew bus', 'emergency vehicle', 'fire truck')
+    jobs = dict()
+
+    jobs["tanker"] = 20
+    jobs["apron stairs"] = 20
+    jobs["luggage cart"] = 100
+    jobs["pushback"] = 70
+    jobs["follow me"] = 10
+    jobs["luggage loader"] = 150
+    jobs["cleaning vehicle"] = 50
+    jobs["toilet vehicle"] = 100
+    jobs["construction vehicle"] = 15
+    jobs["passenger bus"] = 30
+    jobs["crew bus"] = 10
+    jobs["emergency vehicle"] = 6
+    jobs["fire truck"] = 20
+
+    out["apronVehicle"] = list()
+
+    def gen_license_plate():
+        return ''.join(random.choice(string.ascii_uppercase + string.ascii_lowercase + string.digits) for _ in range(8))
+
+    for job, count in jobs.items():
+        busy_count = random.randint(1, min(count - 4, 20))
+
+        for i in range(busy_count):
+            out["apronVehicle"].append(cursor.mogrify(INSERT_APRON_VEHICLE, (gen_license_plate(), "Moving", job)))
+
+        for i in range(count - busy_count):
+            out["apronVehicle"].append(cursor.mogrify(INSERT_APRON_VEHICLE, (gen_license_plate(), "Parking", job)))
+
+        pass
+
+
 def run(data):
     out = dict()
 
@@ -115,6 +154,7 @@ def run(data):
         seed_passenger(location_count, data, database_cursor, out)
         seed_employees(location_count, data, database_cursor, out)
         seed_gates(data, database_cursor, out)
+        seed_apron_vehicles(data, database_cursor, out)
 
     scripts_path = Path("scripts")
     scripts_path.mkdir(parents=True, exist_ok=True)
