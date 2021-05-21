@@ -20,6 +20,7 @@ PASSENGER_COUNT = 2000
 INSERT_COUNTRY_STATEMENT = """INSERT INTO Country (Name) VALUES (%s)"""
 INSERT_LOCATION_STATEMENT = """INSERT INTO Location (Zip, Name, Country) VALUES (%s, %s, %s)"""
 INSERT_PASSENGER_STATEMENT = """INSERT INTO Passenger (Name, Surname, PassportID, HouseNumber, Street, Residence) VALUES (%s, %s, %s, %s, %s, %s)"""
+INSERT_AIRPORT_EMPLOYEE_STATEMENT = """INSERT INTO AirportEmployee(Name, Surname, Job, HouseNumber, Street, Residence) VALUES (%s, %s, %s, %s, %s, %s)"""
 
 
 def seed_country(all_countries, cursor, out):
@@ -58,6 +59,35 @@ def seed_passenger(location_count, data, cursor, out):
             random.randint(HOUSE_NUMBER_MIN, HOUSE_NUMBER_MAX), street_name, location)))
 
 
+def seed_employees(location_count, data, cursor, out):
+    street_name_db = data.cache.get_cached_instance(StreetNamesDB)
+    name_db = data.cache.get_cached_instance(NameDB)
+    names = list(name_db.get_names().items())
+
+    out["airport_employee"] = list()
+
+    # 'load master', 'air traffic controller', 'cleaning power', 'paramedic', 'firefighter', 'apron driver', 'construction worker', 'bus driver'
+
+    jobs = dict()
+    jobs["load master"] = 100
+    jobs["air traffic controller"] = 32
+    jobs["cleaning power"] = 200
+    jobs["paramedic"] = 20
+    jobs["firefighter"] = 100
+    jobs["apron driver"] = 200
+    jobs["construction worker"] = 30
+    jobs["bus driver"] = 80
+
+    for job, count in jobs.items():
+        for i in range(count):
+            first_name, surname = random.choice(names)
+            street_name = random.choice(street_name_db.get_street_names())
+            location = random.randint(1, location_count)
+
+            out["airport_employee"].append(cursor.mogrify(INSERT_AIRPORT_EMPLOYEE_STATEMENT, (
+                first_name, surname, job, random.randint(HOUSE_NUMBER_MIN, HOUSE_NUMBER_MAX), street_name, location)))
+
+
 def run(data):
     out = dict()
 
@@ -71,6 +101,7 @@ def run(data):
         seed_country(all_countries, database_cursor, out)
         location_count = seed_location(data, all_countries, database_cursor, out)
         seed_passenger(location_count, data, database_cursor, out)
+        seed_employees(location_count, data, database_cursor, out)
 
     scripts_path = Path("scripts")
     scripts_path.mkdir(parents=True, exist_ok=True)
