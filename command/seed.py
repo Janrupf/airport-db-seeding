@@ -101,7 +101,7 @@ def seed_gates(data, cursor, out):
 
     for gate in gates_db.get_gates():
         out["parkingPosition"].append(cursor.mogrify(INSERT_GATE_STATEMENT,
-                                                     (gate.label, gate.geoX, gate.geoY, gate.terminal)))
+                                                     (gate.label, gate.geoX, gate.geoY, int(gate.terminal))))
 
 
 def seed_apron_vehicles(data, cursor, out):
