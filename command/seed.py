@@ -1,4 +1,5 @@
 import string
+from types import SimpleNamespace
 
 from data.gatesdb import GatesDB
 from data.namedb import NameDB
@@ -32,6 +33,7 @@ INSERT_GATE_STATEMENT = """INSERT INTO ParkingPosition (Label, GeographicPositio
 INSERT_APRON_VEHICLE_STATEMENT = """INSERT INTO ApronVehicle(LicensePlate, Status, Job) VALUES (%s, %s, %s)"""
 INSERT_PLANE_TYPE_STATEMENT = """INSERT INTO PlaneType(Name) VALUES (%s)"""
 INSERT_AIRLINE_STATEMENT = """INSERT INTO Airline(Callsign, Name, SlotCount, Country) VALUES (%s, %s, %s, %s)"""
+INSERT_SLOT_STATEMENT = """INSERT INTO Slot(Type, StartTime, EndTime, AirlineCallsign) VALUES (%s, %s, %s, %s)"""
 
 
 def seed_country(all_countries, cursor, out):
@@ -157,14 +159,77 @@ def seed_airlines(all_countries, data, cursor, out):
     airlines_db = data.cache.get_cached_instance(AirlinesDB)
     routes_db = data.cache.get_cached_instance(RoutesDB)
 
+    routes_per_airline = dict()
+
     out["airline"] = list()
 
     for airline in airlines_db.get_airlines():
-        slot_count = len([route for route in routes_db.get_routes() if route.callsign == airline.callsign])
+        routes = [route for route in routes_db.get_routes() if route.callsign == airline.callsign]
+        routes_per_airline[airline.callsign] = routes
+
         country_id = all_countries.index(airline.country) + 1
 
+        out["airline"].append(
+            cursor.mogrify(INSERT_AIRLINE_STATEMENT, (airline.callsign, airline.name, len(routes), country_id)))
 
-        out["airline"].append(cursor.mogrify(INSERT_AIRLINE_STATEMENT, (airline.callsign, airline.name, slot_count, country_id)))
+    return routes_per_airline
+
+
+def seed_slots(routes_per_airline, data, cursor, out):
+    class TimeGen:
+        def __init__(self):
+            self.current_start_hour = 6
+            self.current_start_minute = 0
+
+        def __iter__(self):
+            return self
+
+        def __next__(self):
+            self.current_start_minute += 15
+
+            if self.current_start_minute == 60:
+                self.current_start_hour += 1
+                self.current_start_minute = 0
+
+            if self.current_start_hour == 22:
+                self.current_start_hour = 6
+
+            end_hour = self.current_start_hour
+            end_minute = self.current_start_minute + 15
+
+            if end_minute == 60:
+                end_hour += 1
+                end_minute = 0
+
+            return (
+                f"{str(self.current_start_hour).rjust(2, '0')}:{str(self.current_start_minute).rjust(2, '0')}:00",
+                f"{str(end_hour).rjust(2, '0')}:{str(end_minute).rjust(2, '0')}:00"
+            )
+
+    time_gen = TimeGen()
+    used_slot_count = 0
+
+    out["slot"] = list()
+
+    for airline, routes in routes_per_airline.items():
+        for route in routes:
+            if route.origin == "MUC":
+                slot_type = "Departure"
+            elif route.destination == "MUC":
+                slot_type = "Arrival"
+            else:
+                raise KeyError(f"Neither origin ({route.origin}) nor destination ({route.destination}) is MUC")
+
+            start_time, end_time = next(time_gen)
+            out["slot"].append(cursor.mogrify(INSERT_SLOT_STATEMENT, (slot_type, start_time, end_time, airline)))
+            used_slot_count += 1
+
+    for i in range(100):
+        start_time, end_time = next(time_gen)
+        out["slot"].append(cursor.mogrify(INSERT_SLOT_STATEMENT, ("Arrival", start_time, end_time, None)))
+
+        start_time, end_time = next(time_gen)
+        out["slot"].append(cursor.mogrify(INSERT_SLOT_STATEMENT, ("Departure", start_time, end_time, None)))
 
 
 def run(data):
@@ -184,7 +249,9 @@ def run(data):
         seed_gates(data, database_cursor, out)
         seed_apron_vehicles(data, database_cursor, out)
         seed_planes(data, database_cursor, out)
-        seed_airlines(all_countries, data, database_cursor, out)
+        routes_per_airline = seed_airlines(all_countries, data, database_cursor, out)
+        seed_slots(routes_per_airline, data, database_cursor, out)
+
 
     scripts_path = Path("scripts")
     scripts_path.mkdir(parents=True, exist_ok=True)
