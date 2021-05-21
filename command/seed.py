@@ -1,3 +1,4 @@
+from data.gatesdb import GatesDB
 from data.namedb import NameDB
 from data.streetnamesdb import StreetNamesDB
 from data.citiesdb import CitiesDB
@@ -21,6 +22,7 @@ INSERT_COUNTRY_STATEMENT = """INSERT INTO Country (Name) VALUES (%s)"""
 INSERT_LOCATION_STATEMENT = """INSERT INTO Location (Zip, Name, Country) VALUES (%s, %s, %s)"""
 INSERT_PASSENGER_STATEMENT = """INSERT INTO Passenger (Name, Surname, PassportID, HouseNumber, Street, Residence) VALUES (%s, %s, %s, %s, %s, %s)"""
 INSERT_AIRPORT_EMPLOYEE_STATEMENT = """INSERT INTO AirportEmployee(Name, Surname, Job, HouseNumber, Street, Residence) VALUES (%s, %s, %s, %s, %s, %s)"""
+INSERT_GATE_STATEMENT = """INSERT INTO ParkingPosition (Label, GeographicPosition, TerminalID) VALUES (%s, POINT(%s,%s), %s)"""
 
 
 def seed_country(all_countries, cursor, out):
@@ -84,8 +86,18 @@ def seed_employees(location_count, data, cursor, out):
             street_name = random.choice(street_name_db.get_street_names())
             location = random.randint(1, location_count)
 
-            out["airport_employee"].append(cursor.mogrify(INSERT_AIRPORT_EMPLOYEE_STATEMENT, (
+            out["airportEmployee"].append(cursor.mogrify(INSERT_AIRPORT_EMPLOYEE_STATEMENT, (
                 first_name, surname, job, random.randint(HOUSE_NUMBER_MIN, HOUSE_NUMBER_MAX), street_name, location)))
+
+
+def seed_gates(data, cursor, out):
+    gates_db = data.cache.get_cached_instance(GatesDB)
+
+    out["parkingPosition"] = list()
+
+    for gate in gates_db.get_gates():
+        out["parkingPosition"].append(cursor.mogrify(INSERT_GATE_STATEMENT,
+                                                     (gate.label, gate.geoX, gate.geoY, gate.terminal)))
 
 
 def run(data):
@@ -102,6 +114,7 @@ def run(data):
         location_count = seed_location(data, all_countries, database_cursor, out)
         seed_passenger(location_count, data, database_cursor, out)
         seed_employees(location_count, data, database_cursor, out)
+        seed_gates(data, database_cursor, out)
 
     scripts_path = Path("scripts")
     scripts_path.mkdir(parents=True, exist_ok=True)
