@@ -63,10 +63,10 @@ def seed_passenger(location_count, data, cursor, out):
 def seed_gates(data, cursor, out):
     gates_db = data.cache.get_cached_instance(GatesDB)
 
-    out["gate"] = list()
+    out["parkingPosition"] = list()
 
     for gate in gates_db.get_gates():
-        out["gate"].append(cursor.mogrify(INSERT_GATE_STATEMENT,
+        out["parkingPosition"].append(cursor.mogrify(INSERT_GATE_STATEMENT,
                                               (gate.label, gate.geoX, gate.geoY, gate.terminal)))
 
 
