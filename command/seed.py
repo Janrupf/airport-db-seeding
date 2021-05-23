@@ -34,6 +34,7 @@ INSERT_APRON_VEHICLE_STATEMENT = """INSERT INTO ApronVehicle(LicensePlate, Statu
 INSERT_PLANE_TYPE_STATEMENT = """INSERT INTO PlaneType(Name) VALUES (%s)"""
 INSERT_AIRLINE_STATEMENT = """INSERT INTO Airline(Callsign, Name, SlotCount, Country) VALUES (%s, %s, %s, %s)"""
 INSERT_SLOT_STATEMENT = """INSERT INTO Slot(Type, StartTime, EndTime, AirlineCallsign) VALUES (%s, %s, %s, %s)"""
+INSERT_GATE_PLANE_TYPE_STATEMENT = """INSERT INTO ParkingPositionPlaneType(ParkingPositionLabel, PlaneType) VALUES (%s, %s)"""
 
 
 def seed_country(all_countries, cursor, out):
@@ -232,6 +233,21 @@ def seed_slots(routes_per_airline, data, cursor, out):
         out["slot"].append(cursor.mogrify(INSERT_SLOT_STATEMENT, ("Departure", start_time, end_time, None)))
 
 
+def seed_gate_types(data, cursor, out):
+    gate_db = data.cache.get_cached_instance(GatesDB)
+    plane_db = data.cache.get_cached_instance(PlaneDB)
+
+    out["gatePlaneType"] = list()
+    for gate in gate_db.gates:
+        plane_ids = []
+        for i in range(random.randint(3, 5)):
+            plane_id = random.randint(1, len(plane_db.planes))
+            while plane_id in plane_ids:
+                plane_id = random.randint(1, len(plane_db.planes))
+            plane_ids.append(plane_id)
+            out["gatePlaneType"].append(cursor.mogrify(INSERT_GATE_PLANE_TYPE_STATEMENT, (gate.label, plane_id)))
+
+
 def run(data):
     out = dict()
 
@@ -251,6 +267,7 @@ def run(data):
         seed_planes(data, database_cursor, out)
         routes_per_airline = seed_airlines(all_countries, data, database_cursor, out)
         seed_slots(routes_per_airline, data, database_cursor, out)
+        seed_gate_types(data, database_cursor, out)
 
 
     scripts_path = Path("scripts")
