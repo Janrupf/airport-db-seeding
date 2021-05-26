@@ -186,13 +186,13 @@ def seed_slots(routes_per_airline, data, cursor, out):
             return self
 
         def __next__(self):
-            self.current_start_minute += 15
+            self.current_start_minute += random.randint(0, 4) * 15
 
-            if self.current_start_minute == 60:
-                self.current_start_hour += 1
+            if self.current_start_minute >= 60:
+                self.current_start_hour += random.randint(1, 3)
                 self.current_start_minute = 0
 
-            if self.current_start_hour == 22:
+            if self.current_start_hour >= 22:
                 self.current_start_hour = 6
 
             end_hour = self.current_start_hour
@@ -212,7 +212,11 @@ def seed_slots(routes_per_airline, data, cursor, out):
 
     out["slot"] = list()
 
-    for airline, routes in routes_per_airline.items():
+    airlines = list(routes_per_airline.keys())
+    random.shuffle(airlines)
+
+    for airline in airlines:
+        routes = routes_per_airline[airline]
         for route in routes:
             if route.origin == "MUC":
                 slot_type = "Departure"
@@ -231,6 +235,8 @@ def seed_slots(routes_per_airline, data, cursor, out):
 
         start_time, end_time = next(time_gen)
         out["slot"].append(cursor.mogrify(INSERT_SLOT_STATEMENT, ("Departure", start_time, end_time, None)))
+
+    random.shuffle(out["slot"])
 
 
 def seed_gate_types(data, cursor, out):
