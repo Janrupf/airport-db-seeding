@@ -1,5 +1,4 @@
 import string
-from types import SimpleNamespace
 
 from data.gatesdb import GatesDB
 from data.namedb import NameDB
@@ -8,6 +7,7 @@ from data.citiesdb import CitiesDB
 from data.planedb import PlaneDB
 from data.airlinesdb import AirlinesDB
 from data.routesdb import RoutesDB
+from data.time_gen import TimeGen
 
 from pathlib import Path
 
@@ -177,37 +177,7 @@ def seed_airlines(all_countries, data, cursor, out):
 
 
 def seed_slots(routes_per_airline, data, cursor, out):
-    class TimeGen:
-        def __init__(self):
-            self.current_start_hour = 6
-            self.current_start_minute = 0
-
-        def __iter__(self):
-            return self
-
-        def __next__(self):
-            self.current_start_minute += random.randint(0, 4) * 15
-
-            if self.current_start_minute >= 60:
-                self.current_start_hour += random.randint(1, 3)
-                self.current_start_minute = 0
-
-            if self.current_start_hour >= 22:
-                self.current_start_hour = 6
-
-            end_hour = self.current_start_hour
-            end_minute = self.current_start_minute + 15
-
-            if end_minute == 60:
-                end_hour += 1
-                end_minute = 0
-
-            return (
-                f"{str(self.current_start_hour).rjust(2, '0')}:{str(self.current_start_minute).rjust(2, '0')}:00",
-                f"{str(end_hour).rjust(2, '0')}:{str(end_minute).rjust(2, '0')}:00"
-            )
-
-    time_gen = TimeGen()
+    time_gen = TimeGen(1, 3)
     used_slot_count = 0
 
     out["slot"] = list()
