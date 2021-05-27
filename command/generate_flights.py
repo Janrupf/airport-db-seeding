@@ -7,6 +7,7 @@ from data.prefixdb import PrefixDB
 import random
 
 GET_ALL_SLOTS_STATEMENT = """SELECT * FROM Slot"""
+GET_ALL_PASSENGERS_IDS_STATEMENT = """SELECT ID FROM Passenger"""
 GET_AIRLINE_INFO_STATEMENT = """
 SELECT Airline.Callsign, Airline.Name, C.Name AS CountryName FROM Airline JOIN Country C ON C.ID = Airline.Country
 """
@@ -23,6 +24,10 @@ INSERT_FLIGHT_STATEMENT = """
 INSERT INTO Flight 
     (PlaneRegistration, StartParkTime, EndParkTime, PlaneType, AirlineCallsign, ParkingPositionLabel)
     VALUES (%s, %s, %s, %s, %s, %s)
+"""
+
+INSERT_PASSENGER_MOVEMENT_STATEMENT = """
+INSERT INTO PassengerMovement (Passenger, FlightNumber, Type) VALUES (%s, %s, %s)
 """
 
 
@@ -69,6 +74,10 @@ def group_flatten(key_attr, value_attr, objs):
     return grouped
 
 
+def flatten(objs):
+    return [obj[0] for obj in objs]
+
+
 def collected_data(data, cursor):
     cursor.execute(GET_ALL_SLOTS_STATEMENT)
     all_slots = group_by("airline_callsign", map_database_rows(cursor.fetchall(), "id", "type", "start_time", "end_time", "airline_callsign"))
@@ -79,7 +88,10 @@ def collected_data(data, cursor):
     cursor.execute(GET_ALL_PARKING_POSITIONS_WITH_PLANE_TYPES_STATEMENT)
     parking_positions = group_flatten("label", "plane_type", map_database_rows(cursor.fetchall(), "label", "plane_type"))
 
-    return SimpleNamespace(slots=all_slots, airlines=airlines, parking_positions=parking_positions)
+    cursor.execute(GET_ALL_PASSENGERS_IDS_STATEMENT)
+    passenger_ids = flatten(cursor.fetchall())
+
+    return SimpleNamespace(slots=all_slots, airlines=airlines, parking_positions=parking_positions, passenger_ids=passenger_ids)
 
 
 def generate_plane_registration(prefix):
@@ -122,7 +134,28 @@ def seed_passenger_movement(flight_count, out, collected, cursor):
     out["passengerMovement"] = list()
 
     for i in range(1, flight_count + 1):
-        pass
+        passenger_arrival_count = random.randint(40, 200)
+        passenger_departure_count = random.randint(40, 200)
+
+        arrival_ids = set([random.choice(collected.passenger_ids) for _ in range(0, passenger_arrival_count)])
+        departure_ids = set([random.choice(collected.passenger_ids) for _ in range(0, passenger_departure_count)])
+
+        duplicates = list()
+
+        for departure_id in departure_ids:
+            if departure_id in arrival_ids:
+                duplicates.append(departure_id)
+
+        for departure_id in duplicates:
+            departure_ids.remove(departure_id)
+
+        for arrival in arrival_ids:
+            out["passengerMovement"].append(cursor.mogrify(INSERT_PASSENGER_MOVEMENT_STATEMENT, (arrival, i, "Arrival")))
+
+        for departure in departure_ids:
+            out["passengerMovement"].append(cursor.mogrify(INSERT_PASSENGER_MOVEMENT_STATEMENT, (departure, i, "Departure")))
+
+    random.shuffle(out["passengerMovement"])
 
 
 def run(data):
