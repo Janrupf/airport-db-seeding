@@ -19,6 +19,7 @@ FROM ParkingPositionPlaneType
          JOIN PlaneType PT on ParkingPositionPlaneType.PlaneType = PT.ID
          ORDER BY ParkingPositionLabel
 """
+GET_ALL_EMPLOYEES_STATEMENT = """SELECT * FROM AirportEmployee"""
 
 INSERT_FLIGHT_STATEMENT = """
 INSERT INTO Flight 
@@ -28,6 +29,10 @@ INSERT INTO Flight
 
 INSERT_PASSENGER_MOVEMENT_STATEMENT = """
 INSERT INTO PassengerMovement (Passenger, FlightNumber, Type) VALUES (%s, %s, %s)
+"""
+
+INSERT_SERVICE_STATEMENT = """
+INSERT INTO Service (EmployeeNumber, FlightNumber) VALUES (%s, %s)
 """
 
 
@@ -91,7 +96,10 @@ def collected_data(data, cursor):
     cursor.execute(GET_ALL_PASSENGERS_IDS_STATEMENT)
     passenger_ids = flatten(cursor.fetchall())
 
-    return SimpleNamespace(slots=all_slots, airlines=airlines, parking_positions=parking_positions, passenger_ids=passenger_ids)
+    cursor.execute(GET_ALL_EMPLOYEES_STATEMENT)
+    employees = group_by("job", map_database_rows(cursor.fetchall(), "registration_number", "name", "surname", "job", "house_number", "street", "residence"))
+
+    return SimpleNamespace(slots=all_slots, airlines=airlines, parking_positions=parking_positions, passenger_ids=passenger_ids, employees=employees)
 
 
 def generate_plane_registration(prefix):
@@ -158,6 +166,30 @@ def seed_passenger_movement(flight_count, out, collected, cursor):
     random.shuffle(out["passengerMovement"])
 
 
+def seed_service(flight_count, out, collected, cursor):
+    required_people = {
+        "apron driver": (1, 1),
+        "load master": (1, 2),
+        "cleaning power": (5, 10)
+    }
+
+    out["service"] = list()
+
+    assigned_people = list()
+    for i in range(1, flight_count + 1):
+        for job, (min_count, max_count) in required_people.items():
+            count = random.randint(min_count, max_count)
+
+            for _ in range(count):
+                while True:
+                    employee = random.choice(collected.employees[job])
+                    if employee not in assigned_people:
+                        assigned_people.append(employee)
+                        break
+
+                out["service"].append(cursor.mogrify(INSERT_SERVICE_STATEMENT, (employee.registration_number, i)))
+
+
 def run(data):
     out = dict()
 
@@ -165,6 +197,7 @@ def run(data):
         collected = collected_data(data, database_cursor)
         flight_count = seed_flights(data, out, collected, database_cursor)
         seed_passenger_movement(flight_count, out, collected, database_cursor)
+        seed_service(flight_count, out, collected, database_cursor)
         pass
 
     scripts_path = Path("scripts")
