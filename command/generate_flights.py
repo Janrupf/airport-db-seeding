@@ -20,6 +20,7 @@ FROM ParkingPositionPlaneType
          ORDER BY ParkingPositionLabel
 """
 GET_ALL_EMPLOYEES_STATEMENT = """SELECT * FROM AirportEmployee"""
+GET_ALL_APRON_VEHICLES_STATEMENT = """SELECT * FROM ApronVehicle"""
 
 INSERT_FLIGHT_STATEMENT = """
 INSERT INTO Flight 
@@ -33,6 +34,10 @@ INSERT INTO PassengerMovement (Passenger, FlightNumber, Type) VALUES (%s, %s, %s
 
 INSERT_SERVICE_STATEMENT = """
 INSERT INTO Service (EmployeeNumber, FlightNumber) VALUES (%s, %s)
+"""
+
+INSERT_VEHICLE_OPERATION_STATEMENT = """
+INSERT INTO VehicleOperation (EmployeeNumber, LicensePlate, WorkTime) VALUES (%s, %s, %s)
 """
 
 
@@ -99,7 +104,10 @@ def collected_data(data, cursor):
     cursor.execute(GET_ALL_EMPLOYEES_STATEMENT)
     employees = group_by("job", map_database_rows(cursor.fetchall(), "registration_number", "name", "surname", "job", "house_number", "street", "residence"))
 
-    return SimpleNamespace(slots=all_slots, airlines=airlines, parking_positions=parking_positions, passenger_ids=passenger_ids, employees=employees)
+    cursor.execute(GET_ALL_APRON_VEHICLES_STATEMENT)
+    vehicles = group_by("job", map_database_rows(cursor.fetchall(), "license_plate", "status", "job"))
+
+    return SimpleNamespace(slots=all_slots, airlines=airlines, parking_positions=parking_positions, passenger_ids=passenger_ids, employees=employees, vehicles=vehicles)
 
 
 def generate_plane_registration(prefix):
@@ -190,6 +198,41 @@ def seed_service(flight_count, out, collected, cursor):
                 out["service"].append(cursor.mogrify(INSERT_SERVICE_STATEMENT, (employee.registration_number, i)))
 
 
+def seed_vehicle_operation(out, collected, cursor):
+    job_mapping = {
+        "tanker": "apron driver",
+        "apron stairs": "apron driver",
+        "luggage cart": "apron driver",
+        "pushback": "apron driver",
+        "follow me": "apron driver",
+        "luggage loader": "apron driver",
+        "cleaning vehicle": "cleaning power",
+        "toilet vehicle": "cleaning power",
+        "construction vehicle": "construction worker",
+        "passenger bus": "bus driver",
+        "crew bus": "bus driver",
+        "emergency vehicle": "paramedic",
+        "fire truck": "firefighter"
+    }
+
+    available_employees = collected.employees.copy()
+
+    out["vehicleOperation"] = list()
+
+    for vehicle_job, vehicles in collected.vehicles.items():
+        for vehicle in vehicles:
+            if vehicle.status != "Moving":
+                continue
+
+            employees_for_vehicle = available_employees[job_mapping[vehicle_job]]
+            target_employee = random.choice(employees_for_vehicle)
+            employees_for_vehicle.remove(target_employee)
+
+            work_time = random.randint(1, 3)
+
+            out["vehicleOperation"].append(cursor.mogrify(INSERT_VEHICLE_OPERATION_STATEMENT, (target_employee.registration_number, vehicle.license_plate, work_time)))
+
+
 def run(data):
     out = dict()
 
@@ -198,6 +241,7 @@ def run(data):
         flight_count = seed_flights(data, out, collected, database_cursor)
         seed_passenger_movement(flight_count, out, collected, database_cursor)
         seed_service(flight_count, out, collected, database_cursor)
+        seed_vehicle_operation(out, collected, database_cursor)
         pass
 
     scripts_path = Path("scripts")
@@ -215,5 +259,3 @@ def run(data):
                 f.write(f"{query};\n")
 
     data.database.rollback()
-
-    pass
