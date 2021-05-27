@@ -118,12 +118,20 @@ def seed_flights(data, out, collected, cursor):
     return 10
 
 
+def seed_passenger_movement(flight_count, out, collected, cursor):
+    out["passengerMovement"] = list()
+
+    for i in range(1, flight_count + 1):
+        pass
+
+
 def run(data):
     out = dict()
 
     with data.database.cursor() as database_cursor:
         collected = collected_data(data, database_cursor)
         flight_count = seed_flights(data, out, collected, database_cursor)
+        seed_passenger_movement(flight_count, out, collected, database_cursor)
         pass
 
     scripts_path = Path("scripts")
