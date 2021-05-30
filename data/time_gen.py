@@ -65,7 +65,7 @@ class SimpleTimeValue:
         return self.hour == other.hour and self.minute == other.minute and self.second == other.second
 
     def to_string(self):
-        return f"{str(self.hour).rjust(2, '0')}:{str(self.minute).rjust(2, '0')}:{str(self.minute).rjust(2, '0')}"
+        return f"{str(self.hour).rjust(2, '0')}:{str(self.minute).rjust(2, '0')}:{str(self.second).rjust(2, '0')}"
 
     def __str__(self):
         return self.to_string()

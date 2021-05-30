@@ -7,6 +7,7 @@ from data.prefixdb import PrefixDB
 import random
 
 GET_ALL_SLOTS_STATEMENT = """SELECT * FROM Slot"""
+GET_ALL_PASSENGERS_IDS_STATEMENT = """SELECT ID FROM Passenger"""
 GET_AIRLINE_INFO_STATEMENT = """
 SELECT Airline.Callsign, Airline.Name, C.Name AS CountryName FROM Airline JOIN Country C ON C.ID = Airline.Country
 """
@@ -18,11 +19,25 @@ FROM ParkingPositionPlaneType
          JOIN PlaneType PT on ParkingPositionPlaneType.PlaneType = PT.ID
          ORDER BY ParkingPositionLabel
 """
+GET_ALL_EMPLOYEES_STATEMENT = """SELECT * FROM AirportEmployee"""
+GET_ALL_APRON_VEHICLES_STATEMENT = """SELECT * FROM ApronVehicle"""
 
 INSERT_FLIGHT_STATEMENT = """
 INSERT INTO Flight 
     (PlaneRegistration, StartParkTime, EndParkTime, PlaneType, AirlineCallsign, ParkingPositionLabel)
     VALUES (%s, %s, %s, %s, %s, %s)
+"""
+
+INSERT_PASSENGER_MOVEMENT_STATEMENT = """
+INSERT INTO PassengerMovement (Passenger, FlightNumber, Type) VALUES (%s, %s, %s)
+"""
+
+INSERT_SERVICE_STATEMENT = """
+INSERT INTO Service (EmployeeNumber, FlightNumber) VALUES (%s, %s)
+"""
+
+INSERT_VEHICLE_OPERATION_STATEMENT = """
+INSERT INTO VehicleOperation (EmployeeNumber, LicensePlate, WorkTime) VALUES (%s, %s, %s)
 """
 
 
@@ -69,6 +84,10 @@ def group_flatten(key_attr, value_attr, objs):
     return grouped
 
 
+def flatten(objs):
+    return [obj[0] for obj in objs]
+
+
 def collected_data(data, cursor):
     cursor.execute(GET_ALL_SLOTS_STATEMENT)
     all_slots = group_by("airline_callsign", map_database_rows(cursor.fetchall(), "id", "type", "start_time", "end_time", "airline_callsign"))
@@ -79,7 +98,16 @@ def collected_data(data, cursor):
     cursor.execute(GET_ALL_PARKING_POSITIONS_WITH_PLANE_TYPES_STATEMENT)
     parking_positions = group_flatten("label", "plane_type", map_database_rows(cursor.fetchall(), "label", "plane_type"))
 
-    return SimpleNamespace(slots=all_slots, airlines=airlines, parking_positions=parking_positions)
+    cursor.execute(GET_ALL_PASSENGERS_IDS_STATEMENT)
+    passenger_ids = flatten(cursor.fetchall())
+
+    cursor.execute(GET_ALL_EMPLOYEES_STATEMENT)
+    employees = group_by("job", map_database_rows(cursor.fetchall(), "registration_number", "name", "surname", "job", "house_number", "street", "residence"))
+
+    cursor.execute(GET_ALL_APRON_VEHICLES_STATEMENT)
+    vehicles = group_by("job", map_database_rows(cursor.fetchall(), "license_plate", "status", "job"))
+
+    return SimpleNamespace(slots=all_slots, airlines=airlines, parking_positions=parking_positions, passenger_ids=passenger_ids, employees=employees, vehicles=vehicles)
 
 
 def generate_plane_registration(prefix):
@@ -118,12 +146,102 @@ def seed_flights(data, out, collected, cursor):
     return 10
 
 
+def seed_passenger_movement(flight_count, out, collected, cursor):
+    out["passengerMovement"] = list()
+
+    for i in range(1, flight_count + 1):
+        passenger_arrival_count = random.randint(40, 200)
+        passenger_departure_count = random.randint(40, 200)
+
+        arrival_ids = set([random.choice(collected.passenger_ids) for _ in range(0, passenger_arrival_count)])
+        departure_ids = set([random.choice(collected.passenger_ids) for _ in range(0, passenger_departure_count)])
+
+        duplicates = list()
+
+        for departure_id in departure_ids:
+            if departure_id in arrival_ids:
+                duplicates.append(departure_id)
+
+        for departure_id in duplicates:
+            departure_ids.remove(departure_id)
+
+        for arrival in arrival_ids:
+            out["passengerMovement"].append(cursor.mogrify(INSERT_PASSENGER_MOVEMENT_STATEMENT, (arrival, i, "Arrival")))
+
+        for departure in departure_ids:
+            out["passengerMovement"].append(cursor.mogrify(INSERT_PASSENGER_MOVEMENT_STATEMENT, (departure, i, "Departure")))
+
+    random.shuffle(out["passengerMovement"])
+
+
+def seed_service(flight_count, out, collected, cursor):
+    required_people = {
+        "apron driver": (1, 1),
+        "load master": (1, 2),
+        "cleaning power": (5, 10)
+    }
+
+    out["service"] = list()
+
+    assigned_people = list()
+    for i in range(1, flight_count + 1):
+        for job, (min_count, max_count) in required_people.items():
+            count = random.randint(min_count, max_count)
+
+            for _ in range(count):
+                while True:
+                    employee = random.choice(collected.employees[job])
+                    if employee not in assigned_people:
+                        assigned_people.append(employee)
+                        break
+
+                out["service"].append(cursor.mogrify(INSERT_SERVICE_STATEMENT, (employee.registration_number, i)))
+
+
+def seed_vehicle_operation(out, collected, cursor):
+    job_mapping = {
+        "tanker": "apron driver",
+        "apron stairs": "apron driver",
+        "luggage cart": "apron driver",
+        "pushback": "apron driver",
+        "follow me": "apron driver",
+        "luggage loader": "apron driver",
+        "cleaning vehicle": "cleaning power",
+        "toilet vehicle": "cleaning power",
+        "construction vehicle": "construction worker",
+        "passenger bus": "bus driver",
+        "crew bus": "bus driver",
+        "emergency vehicle": "paramedic",
+        "fire truck": "firefighter"
+    }
+
+    available_employees = collected.employees.copy()
+
+    out["vehicleOperation"] = list()
+
+    for vehicle_job, vehicles in collected.vehicles.items():
+        for vehicle in vehicles:
+            if vehicle.status != "Moving":
+                continue
+
+            employees_for_vehicle = available_employees[job_mapping[vehicle_job]]
+            target_employee = random.choice(employees_for_vehicle)
+            employees_for_vehicle.remove(target_employee)
+
+            work_time = random.randint(1, 3)
+
+            out["vehicleOperation"].append(cursor.mogrify(INSERT_VEHICLE_OPERATION_STATEMENT, (target_employee.registration_number, vehicle.license_plate, work_time)))
+
+
 def run(data):
     out = dict()
 
     with data.database.cursor() as database_cursor:
         collected = collected_data(data, database_cursor)
         flight_count = seed_flights(data, out, collected, database_cursor)
+        seed_passenger_movement(flight_count, out, collected, database_cursor)
+        seed_service(flight_count, out, collected, database_cursor)
+        seed_vehicle_operation(out, collected, database_cursor)
         pass
 
     scripts_path = Path("scripts")
@@ -141,5 +259,3 @@ def run(data):
                 f.write(f"{query};\n")
 
     data.database.rollback()
-
-    pass
