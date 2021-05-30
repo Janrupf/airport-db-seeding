@@ -7,6 +7,7 @@ from types import SimpleNamespace
 
 import command.seed
 import command.generate_flights
+import command.generate_queries
 from data.cache import Cache
 
 if __name__ == '__main__':
@@ -15,6 +16,7 @@ if __name__ == '__main__':
     subparsers = parser.add_subparsers(dest="subparsers", description="Seed the database")
     seed_parser = subparsers.add_parser("seed")
     generate_flights_parser = subparsers.add_parser("generate-flights")
+    generate_queries_parser = subparsers.add_parser("generate-queries")
 
     args = parser.parse_args()
 
@@ -41,5 +43,7 @@ if __name__ == '__main__':
         command.seed.run(command_data)
     elif args.subparsers == "generate-flights":
         command.generate_flights.run(command_data)
+    elif args.subparsers == "generate-queries":
+        command.generate_queries.run(command_data)
     else:
         raise RuntimeError("No subcommand supplied")
