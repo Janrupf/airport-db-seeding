@@ -293,7 +293,7 @@ Ergebnis:
 
 2.
 ```sql
-    --  AT.1: Gibt die Tabelle Airline aus und ergänzt durch Beziehungen Daten.
+--  AT.1: Gibt die Tabelle Airline aus und ergänzt durch Beziehungen Daten.
 SELECT Callsign, A.Name as AirlineName, SlotCount, Country as CountryID, C.Name as CountryName FROM Airline A -- Projektion mit Aliases
 JOIN Country C on C.ID = A.Country; -- mit Beziehungen zwischen Airline und Country den Namen des Landes laden
 ```
